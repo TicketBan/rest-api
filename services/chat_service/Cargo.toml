@@ -1,0 +1,25 @@
+[package]
+name = "chat_service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio.workspace = true
+async-trait.workspace = true
+actix-web.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+env_logger.workspace = true
+log.workspace = true
+dotenvy.workspace = true
+sqlx.workspace = true
+derive_more.workspace = true
+lazy_static = "1.4" 
+actix-web-actors = "4.2"  
+actix-cors = "0.7.1"  
+actix = "0.13" 
+futures = "0.3" 
+reqwest = { version = "0.11", features = ["json"] }
+shared = { path = "../../shared" }

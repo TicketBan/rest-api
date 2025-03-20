@@ -1,0 +1,42 @@
+[workspace]
+members = [
+    "services/chat_service",
+    "services/user_service",
+    "shared"
+]
+
+resolver = "2"
+
+[workspace.dependencies]
+# Asynchronous and runtime
+tokio = { version = "1.28", features = ["full"] }
+futures-util = "0.3"
+async-trait = "0.1"
+
+# Actix related
+actix-web = "4.3.1"
+
+# Serialization and deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.3", features = ["v4", "serde"] }
+prost = "0.12"
+
+# Logging and environment
+env_logger = "0.11.7"
+log = "0.4"
+dotenvy = "0.15"
+
+# Miscellaneous
+derive_more = "0.99"
+
+# Database
+sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
+
+# Security
+jsonwebtoken = "9.3"
+
+tonic = "0.11"
+
+

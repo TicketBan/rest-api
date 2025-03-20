@@ -1,0 +1,18 @@
+syntax = "proto3";
+package user_service_grpc;
+
+service UserServiceGrpc {
+    rpc GetUserByUid (UserRequest) returns (UserResponse);
+}
+
+message UserRequest {
+    string user_uid = 1;
+}
+
+message UserResponse {
+    string uid = 1;
+    string username = 2;
+    string email = 3;
+    int64 created_at = 4;
+    int64 updated_at = 5;
+}
