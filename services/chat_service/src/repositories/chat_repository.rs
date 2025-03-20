@@ -76,21 +76,6 @@ impl ChatRepository for PgChatRepository {
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Error creating a chat room: {}", e)))?;
-
-        let client = Client::new();
-        let user_service_url = "http://127.0.0.1:8080/api/users";
-
-        for user_uid in &chat_dto.participants {
-            let response = client
-                .get(format!("{}/{}", user_service_url, user_uid))
-                .send()
-                .await
-                .map_err(|e| ServiceError::internal_error(&format!("User service error: {}", e)))?;
-
-            if !response.status().is_success() {
-                return Err(ServiceError::bad_request(&format!("User with uid {} does not exist", user_uid)));
-            }
-        }
     
         for user_uid in &chat_dto.participants {
             sqlx::query(

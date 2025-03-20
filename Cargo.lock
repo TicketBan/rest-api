@@ -648,12 +648,14 @@ dependencies = [
  "futures",
  "lazy_static",
  "log",
+ "prost",
  "reqwest",
  "serde",
  "serde_json",
  "shared",
  "sqlx",
  "tokio",
+ "tonic",
  "uuid",
 ]
 
@@ -3105,6 +3107,7 @@ dependencies = [
  "futures-util",
  "jsonwebtoken",
  "log",
+ "prost",
  "serde",
  "serde_json",
  "shared",

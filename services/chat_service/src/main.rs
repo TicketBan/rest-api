@@ -5,6 +5,7 @@ mod repositories;
 mod services;
 mod errors;
 mod websocket;
+mod grpc;
 
 use actix_web::{web, App, HttpResponse, HttpServer};
 use actix_web::middleware::Logger;
@@ -16,6 +17,7 @@ use std::sync::Arc;
 use env_logger;
 use log::LevelFilter;
 use shared::middleware::auth::Authentication;
+use sqlx;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -24,10 +26,15 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     let pg_pool = init_db_pool().await;
-    let pool = Arc::new(pg_pool);
+
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = env::var("PORT").unwrap_or_else(|_| "8081".to_string());
     let server_address = format!("{}:{}", host, port);
+
+    let _ = sqlx::migrate!().run(&pg_pool).await;
+
+
+    let pool = Arc::new(pg_pool);
 
     HttpServer::new(move || {
         let cors = Cors::default()

@@ -15,28 +15,30 @@ use env_logger;
 use log::LevelFilter;
 use std::env;
 use shared::middleware::auth::Authentication;
-// use crate::grpc::server::start_grpc_server;
-
+use crate::grpc::server::start_grpc_server;
+use tokio::task;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    
     env_logger::Builder::new()
         .filter_level(LevelFilter::Info)
         .init();
 
     let pool = init_db_pool().await;
-    let grpc_pool = pool.clone();
+    let grpc_pool: sqlx::Pool<sqlx::Postgres> = pool.clone();
 
-    // task::spawn(async move {
-    //     if let Err(e) = start_grpc_server(grpc_pool).await {
-    //         eprintln!("gRPC server error: {}", e);
-    //     }
-    // });
+    task::spawn(async move {
+      let _ = start_grpc_server(grpc_pool).await;
+    });
+
 
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let server_address = format!("{}:{}", host, port);
 
+    let _ = sqlx::migrate!().run(&pool).await;
+    
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())

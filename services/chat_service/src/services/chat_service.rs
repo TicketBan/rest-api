@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use crate::grpc::client::get_user_by_uid;
 use crate::models::chat::{Chat, CreateChatDTO};
 use crate::repositories::chat_repository::{ChatRepository, PgChatRepository};
 use crate::errors::service_error::ServiceError;
@@ -21,7 +22,7 @@ impl<T: ChatRepository> ChatService<T> {
     pub async fn get_user_chats(&self, user_uid: &str) -> Result<Vec<Chat>, ServiceError> {
         let user_uid = Uuid::parse_str(user_uid)
             .map_err(|e| ServiceError::bad_request(&format!("Invalid UUID format: {}", e)))?;
-
+        
         self.repository.get_user_chats(&user_uid).await
     }
     
@@ -32,11 +33,23 @@ impl<T: ChatRepository> ChatService<T> {
         self.repository.get_by_id(&uid).await
     }
     
-    pub async fn create(&self, chat_dto: CreateChatDTO) -> Result<Chat, ServiceError> {
+    pub async fn create(&self, chat_dto: &CreateChatDTO) -> Result<Chat, ServiceError> {
         if chat_dto.participants.is_empty() {
             return Err(ServiceError::bad_request("The chat must have at least one participant."));
         }
 
+        for user_uid in &chat_dto.participants {
+            
+            match get_user_by_uid(user_uid.to_string()).await {
+                Ok(_) => {
+                    log::info!("User with UID {} found", user_uid);
+                }
+                Err(e) => {
+                    log::error!("Failed to find user with UID {}: {:?}", user_uid, e);
+                    return Err(ServiceError::not_found(&format!("User with UID {} not found", user_uid)));
+                }
+            }
+        }
         self.repository.create(&chat_dto).await
     }
     

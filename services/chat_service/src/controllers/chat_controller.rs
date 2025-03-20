@@ -32,8 +32,8 @@ pub async fn create_chat(
     chat_dto: web::Json<CreateChatDTO>
 ) -> Result<HttpResponse, ServiceError> {
     let service = ChatService::<PgChatRepository>::new(pool.get_ref().clone());
-    
-    let chat = service.create(chat_dto.0).await?;
+
+    let chat = service.create(&chat_dto.0).await?;
     Ok(HttpResponse::Created().json(ResponseBody::new("Chat has been successfully created", Some(chat))))
 }
 

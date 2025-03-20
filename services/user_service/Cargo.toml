@@ -21,3 +21,4 @@ shared = { path = "../../shared" }
 sqlx.workspace = true
 argon2 = "0.5.3"
 tonic.workspace = true 
+prost.workspace = true

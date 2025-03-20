@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use sqlx::PgPool;
 use uuid::Uuid;
 use argon2::{
