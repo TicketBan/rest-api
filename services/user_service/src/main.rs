@@ -17,6 +17,7 @@ use std::env;
 use shared::middleware::auth::Authentication;
 use crate::grpc::server::start_grpc_server;
 use tokio::task;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -33,8 +34,8 @@ async fn main() -> std::io::Result<()> {
     });
 
 
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let host = env::var("USER_SERVICE_HOST");
+    let port = env::var("USER_SERVICE_PORT");
     let server_address = format!("{}:{}", host, port);
 
     let _ = sqlx::migrate!().run(&pool).await;
@@ -42,7 +43,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .wrap(Authentication::new())
+            .wrap(Authentication::new(env::var("JWT_SECRET")))
             .configure(config_services)
             .app_data(actix_web::web::Data::new(pool.clone()))
     })

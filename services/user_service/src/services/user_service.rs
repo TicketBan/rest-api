@@ -79,10 +79,11 @@ impl<T: UserRepository> UserService<T> {
 
         let user_token = UserToken::new(user.uid);
         
-        let token = user_token.generate_token("SECRETKEY")
+        let token = user_token.generate_token(env::var("JWT_SECRET"))
               .map_err(|e| ServiceError::internal_error(&format!("Error generating token: {:?}", e)))?;
             
-        let expires_at: chrono::DateTime<Utc> = NaiveDateTime::from_timestamp(user_token.exp, 0).and_utc();
+        let expires_at = DateTime::<Utc>::from_timestamp(user_token.exp, 0)
+              .expect("Invalid timestamp");
 
         let response = LoginResponse {
             user: user,

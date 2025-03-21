@@ -3,10 +3,9 @@ use tonic::transport::Channel;
 use shared::user_service_grpc::{UserResponse, UserRequest};
 use shared::user_service_grpc::user_service_grpc_client::UserServiceGrpcClient;
 use crate::errors::service_error::ServiceError;
-use log;
 
 pub async fn connect_to_grpc_server() -> Result<UserServiceGrpcClient<Channel>, Status> {
-    let url = "http://[::1]:50052"; 
+    let url = std::env::var("GRPC_USER_SERVICE_URL"); 
 
     match UserServiceGrpcClient::connect(url).await {
         Ok(client) => Ok(client),

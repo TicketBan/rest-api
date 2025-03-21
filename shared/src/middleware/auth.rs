@@ -6,9 +6,11 @@ use std::rc::Rc;
 use log::{error, info};
 use crate::models::user_token::UserToken;
 use std::task::{Context, Poll};
+use std::env;
 
 pub struct AuthenticationMiddleware<S> {
     service: Rc<S>,
+    secret: String,
 }
 
 impl<S, B> Service<ServiceRequest> for AuthenticationMiddleware<S>
@@ -26,10 +28,9 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let service = self.service.clone();
+        let secret = self.secret.clone(); 
     
         let excluded_paths = vec!["/api/users/auth", "/api/users/auth"];
-
-        log::info!("{:?}", req.path());
 
         if excluded_paths.iter().any(|&path| req.path().starts_with(path)) {
             return Box::pin(async move {
@@ -44,9 +45,8 @@ where
         if let Some(auth_header) = auth_header {
             if let Ok(auth_str) = auth_header.to_str() {
                 if auth_str.starts_with("Bearer ") {
-                    log::info!("{:?}",&auth_str[7..]);
                     let token = &auth_str[7..];
-                    match UserToken::validate_token(token, "SECRETKEY") {
+                    match UserToken::validate_token(token, &secret) {
                         Ok(user_token) if user_token.is_valid() => {
                             let fut = self.service.call(req);
                             return Box::pin(async move {
@@ -57,7 +57,7 @@ where
                             });
                         }
                         Ok(_) => error!("Token expired"),
-                        Err(e) => error!("Invalid token: {:?}", e),
+                        Err(e) => error!("Invalid token: {:?}", env::var("S")),
                     }
                 }
             }
@@ -69,11 +69,13 @@ where
     }
 }
 
-pub struct Authentication;
+pub struct Authentication{
+    secret: String
+}
 
 impl Authentication {
-    pub fn new() -> Self {
-        Self
+    pub fn new(secret: String) -> Self {
+        Self { secret }
     }
 }
 
@@ -91,6 +93,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ok(AuthenticationMiddleware {
             service: Rc::new(service),
+            secret: self.secret.clone(),
         })
     }
 }

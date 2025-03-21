@@ -4,6 +4,7 @@ use sqlx::{FromRow};
 use chrono::{DateTime, Utc, Duration};
 use uuid::Uuid;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use std::env;
 
 #[derive(Serialize, Deserialize, FromRow, Debug, Clone)]
 pub struct UserToken {
@@ -33,22 +34,19 @@ impl UserToken {
     }
     
     pub fn generate_token(&self, secret: &str) -> Result<String, TokenError> {
-        log::info!("Validating token with secret: {:?}", secret);
         let key = encode(
             &Header::default(),
             &self,
-            &EncodingKey::from_secret("sasha".as_bytes()),
+            &EncodingKey::from_secret(secret.as_bytes()),
         ).map_err(|e| TokenError::Creation(e.to_string()));
         log::info!("{:?}", key);
         key
     }
     
     pub fn validate_token(token: &str, secret: &str) -> Result<Self, TokenError> {
-        log::info!("Validating token with secret: {:?}", secret);
-        log::info!("Token {:?}", token);
         let decoded = decode::<UserToken>(
             token,
-            &DecodingKey::from_secret("sasha".as_bytes()),
+            &DecodingKey::from_secret(secret.as_bytes()),
             &Validation::default(),
         )
         .map_err(|e| match e.kind() {

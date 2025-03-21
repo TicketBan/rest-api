@@ -27,8 +27,8 @@ async fn main() -> std::io::Result<()> {
 
     let pg_pool = init_db_pool().await;
 
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = env::var("PORT").unwrap_or_else(|_| "8081".to_string());
+    let host = env::var("CHAT_SERVICE_HOST").unwrap();
+    let port = env::var("CHAT_SERVICE_PORT").unwrap();
     let server_address = format!("{}:{}", host, port);
 
     let _ = sqlx::migrate!().run(&pg_pool).await;
@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
-            .wrap(Authentication::new())
+            .wrap(Authentication::new(env::var("JWT_SECRET")))
             .configure(config_services)
             .app_data(actix_web::web::Data::new(pool.clone()))
     })
