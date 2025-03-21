@@ -8,11 +8,12 @@ use argon2::{
     },
     Argon2
 };
-use chrono::{Utc, NaiveDateTime};
+use chrono::{Utc,DateTime};
 use crate::models::user::{LoginDTO, User, UserDTO, LoginResponse};
 use shared::models::user_token::UserToken;
 use crate::repositories::user_repository::{UserRepository, PgUserRepository};
 use crate::errors::service_error::ServiceError;
+use std::env;
 
 
 pub struct UserService<T: UserRepository> {
@@ -79,7 +80,7 @@ impl<T: UserRepository> UserService<T> {
 
         let user_token = UserToken::new(user.uid);
         
-        let token = user_token.generate_token(env::var("JWT_SECRET").unwrap())
+        let token = user_token.generate_token(&env::var("JWT_SECRET").unwrap())
               .map_err(|e| ServiceError::internal_error(&format!("Error generating token: {:?}", e)))?;
             
         let expires_at = DateTime::<Utc>::from_timestamp(user_token.exp, 0)

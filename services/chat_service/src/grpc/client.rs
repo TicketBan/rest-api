@@ -5,7 +5,7 @@ use shared::user_service_grpc::user_service_grpc_client::UserServiceGrpcClient;
 use crate::errors::service_error::ServiceError;
 
 pub async fn connect_to_grpc_server() -> Result<UserServiceGrpcClient<Channel>, Status> {
-    let url = std::env::var("GRPC_USER_SERVICE_URL").unwrap(); 
+    let url = "http://[::1]:50052"; 
 
     match UserServiceGrpcClient::connect(url).await {
         Ok(client) => Ok(client),
