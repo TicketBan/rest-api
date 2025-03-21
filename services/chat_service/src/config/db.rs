@@ -5,7 +5,7 @@ use dotenvy::dotenv;
 pub async  fn init_db_pool() -> PgPool {
     dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL_CHAT_SERVICE")
+    let database_url = env::var("DATABASE_URL_CHAT_SERVICE").unwrap()
         .expect("DATABASE_URL_CHAT_SERVICE must be set");
 
     PgPoolOptions::new()

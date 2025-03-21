@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
-            .wrap(Authentication::new(env::var("JWT_SECRET")))
+            .wrap(Authentication::new(env::var("JWT_SECRET").unwrap()))
             .configure(config_services)
             .app_data(actix_web::web::Data::new(pool.clone()))
     })

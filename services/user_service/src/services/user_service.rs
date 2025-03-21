@@ -79,7 +79,7 @@ impl<T: UserRepository> UserService<T> {
 
         let user_token = UserToken::new(user.uid);
         
-        let token = user_token.generate_token(env::var("JWT_SECRET"))
+        let token = user_token.generate_token(env::var("JWT_SECRET").unwrap())
               .map_err(|e| ServiceError::internal_error(&format!("Error generating token: {:?}", e)))?;
             
         let expires_at = DateTime::<Utc>::from_timestamp(user_token.exp, 0)

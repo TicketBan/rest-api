@@ -34,8 +34,8 @@ async fn main() -> std::io::Result<()> {
     });
 
 
-    let host = env::var("USER_SERVICE_HOST");
-    let port = env::var("USER_SERVICE_PORT");
+    let host = env::var("USER_SERVICE_HOST").unwrap();
+    let port = env::var("USER_SERVICE_PORT").unwrap();
     let server_address = format!("{}:{}", host, port);
 
     let _ = sqlx::migrate!().run(&pool).await;
@@ -43,7 +43,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .wrap(Authentication::new(env::var("JWT_SECRET")))
+            .wrap(Authentication::new(env::var("JWT_SECRET").unwrap()))
             .configure(config_services)
             .app_data(actix_web::web::Data::new(pool.clone()))
     })

@@ -57,7 +57,7 @@ where
                             });
                         }
                         Ok(_) => error!("Token expired"),
-                        Err(e) => error!("Invalid token: {:?}", env::var("S")),
+                        Err(e) => error!("Invalid token"),
                     }
                 }
             }

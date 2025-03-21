@@ -41,7 +41,7 @@ impl UserServiceGrpc for UserGrpcService {
 }
 
 pub async fn start_grpc_server(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    let addr =  std::env::var("GRPC_USER_SERVICE_URL").parse()?;
+    let addr =  std::env::var("GRPC_USER_SERVICE_URL").unwrap().parse()?;
     let user_service = UserGrpcService::new(Arc::new(pool));
 
     println!("Starting the gRPC user-service server on {}", addr);
