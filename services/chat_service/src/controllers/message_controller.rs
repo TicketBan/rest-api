@@ -1,11 +1,10 @@
 use actix_web::{web, HttpResponse};
 use std::sync::Arc;
-use crate::models::message::{CreateMessageDTO};
+use crate::models::message::CreateMessageDTO;
 use crate::models::response::ResponseBody;
 use crate::services::message_service::MessageService;
 use crate::errors::service_error::ServiceError;
 use sqlx::PgPool;
-use log;
 
 pub async fn get_chat_messages(
     pool: web::Data<Arc<PgPool>>,
@@ -13,7 +12,6 @@ pub async fn get_chat_messages(
 ) -> Result<HttpResponse, ServiceError> {
       
     let service = MessageService::new(pool.get_ref().clone());
-    log::info!("{:?}", &chat_uid);
     let messages = service.get_all_messages_by_chat_uid(&chat_uid).await?;
     Ok(HttpResponse::Ok().json(ResponseBody::new("Messages successfully retrieved", Some(messages))))
 }

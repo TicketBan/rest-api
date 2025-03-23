@@ -7,34 +7,49 @@ mod errors;
 mod websocket;
 mod grpc;
 
-use actix_web::{web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Logger;
 use actix_cors::Cors;
 use config::app::config_services;
 use config::db::init_db_pool;
-use std::env;
 use std::sync::Arc;
 use env_logger;
-use log::LevelFilter;
 use shared::middleware::auth::Authentication;
-use sqlx;
+use dotenvy::dotenv;
+use config::config::Config;
+use log::{info, error};
+use services::chat_service::ChatService;
+use grpc::client::init_grpc_client;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
+    let config = Config::from_env().map_err(|e| {
+        error!("Config error: {}", e);
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+    })?;
+
     env_logger::Builder::new()
-        .filter_level(LevelFilter::Info) 
-        .init();
+    .filter_level(config.log_level) 
+    .init();
+    info!("Starting chat_service with config: {:?}", config);
 
-    let pg_pool = init_db_pool().await;
+    let pool = Arc::new(init_db_pool(&config.database_url).await.map_err(|e| {
+        error!("Failed to create DB pool: {}", e);
+        std::io::Error::new(std::io::ErrorKind::Other, e)
+    })?);
 
-    let host = env::var("CHAT_SERVICE_HOST").unwrap();
-    let port = env::var("CHAT_SERVICE_PORT").unwrap();
-    let server_address = format!("{}:{}", host, port);
+    // let _ = sqlx::migrate!().run(&pg_pool).await;
+    let grpc_client = match init_grpc_client(config.grpc_addr.clone(), std::time::Duration::from_secs(5)).await {
+        Ok(client) => client,
+        Err(e) => {
+            log::error!("Failed to initialize gRPC client: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()));
+        }
+    };
 
-    let _ = sqlx::migrate!().run(&pg_pool).await;
+    let service = ChatService::new(pool.clone(), grpc_client.clone());
 
-
-    let pool = Arc::new(pg_pool);
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -46,11 +61,12 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
-            .wrap(Authentication::new(env::var("JWT_SECRET").unwrap()))
+            .wrap(Authentication::new(config.jwt_secret.clone(),[].into()))
             .configure(config_services)
-            .app_data(actix_web::web::Data::new(pool.clone()))
+            .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(service.clone()))
     })
-    .bind(server_address)?
+    .bind(config.http_addr)?
     .workers(4)
     .run()
     .await

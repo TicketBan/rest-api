@@ -8,11 +8,12 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
                 web::scope("/users")
                     .route("", web::get().to(user_controller::get_users))
                     .route("/{uid}", web::get().to(user_controller::get_user_by_id))
-                    .service(
-                        web::scope("/auth") 
-                            .route("/signup", web::post().to(user_controller::signup))
-                            .route("/login", web::post().to(user_controller::login))
-                    )
+                    
+            )
+            .service(
+                web::scope("/auth") 
+                    .route("/signup", web::post().to(user_controller::signup))
+                    .route("/login", web::post().to(user_controller::login))
             )
     );
 }

@@ -1,7 +1,6 @@
 use crate::errors::service_error::ServiceError;
-use crate::models::message::{self, CreateMessageDTO, Message};
+use crate::models::message::{CreateMessageDTO, Message};
 use async_trait::async_trait;
-use chrono::Utc;
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -25,7 +24,7 @@ impl PgMessageRepository {
 #[async_trait]
 impl MessageRepository for PgMessageRepository {
     async fn get_all_by_chat_uid(&self, chat_uid: &Uuid) -> Result<Vec<Message>, ServiceError> {
-        let messages = sqlx::query_as::<_, Message>(
+        sqlx::query_as::<_, Message>(
             "SELECT uid, chat_uid, user_uid, content, created_at 
              FROM messages 
              WHERE chat_uid = $1
@@ -34,12 +33,10 @@ impl MessageRepository for PgMessageRepository {
         .bind(chat_uid)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?;
-
-        Ok(messages)
+        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
     }
     async fn create(&self, create_message_dto: &CreateMessageDTO) -> Result<Message, ServiceError> {
-        let message = sqlx::query_as::<_, Message>(
+        sqlx::query_as::<_, Message>(
             "INSERT INTO messages (chat_uid, user_uid, content)
              VALUES ($1, $2, $3)
              RETURNING uid, chat_uid, user_uid, content, created_at
@@ -50,8 +47,7 @@ impl MessageRepository for PgMessageRepository {
         .bind(&create_message_dto.content)
         .fetch_one(&*self.pool)
         .await
-        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?; // Note the ? here
+        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
 
-        Ok(message)
     }
 }

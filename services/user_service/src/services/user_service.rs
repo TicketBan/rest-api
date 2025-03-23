@@ -1,119 +1,97 @@
 use std::sync::Arc;
 use sqlx::PgPool;
 use uuid::Uuid;
-use argon2::{
-    password_hash::{
-        rand_core::OsRng,
-        PasswordHash, PasswordHasher, SaltString, PasswordVerifier
-    },
-    Argon2
-};
-use chrono::{Utc,DateTime};
+use argon2::{password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString, PasswordVerifier}, Argon2};
+use chrono::{Utc, DateTime};
 use crate::models::user::{LoginDTO, User, UserDTO, LoginResponse};
 use shared::models::user_token::UserToken;
 use crate::repositories::user_repository::{UserRepository, PgUserRepository};
 use crate::errors::service_error::ServiceError;
-use std::env;
-
+use log::{info, error};
+use validator::Validate;
 
 pub struct UserService<T: UserRepository> {
     repository: T,
+    jwt_secret: Arc<String>,
 }
 
 impl UserService<PgUserRepository> {
-    pub fn new(pool: Arc<PgPool>) -> Self {
+    pub fn new(pool: Arc<PgPool>, jwt_secret: Arc<String>) -> Self {
         Self {
             repository: PgUserRepository::new(pool),
+            jwt_secret,
         }
     }
 }
 
 impl<T: UserRepository> UserService<T> {
     pub async fn get_all(&self) -> Result<Vec<User>, ServiceError> {
+        info!("Fetching all users");
         self.repository.get_all().await
     }
     
     pub async fn get_by_id(&self, uid: &str) -> Result<User, ServiceError> {
-        let uid = Uuid::parse_str(uid)
-            .map_err(|_| ServiceError::bad_request("Uuid error"))?;
-
+        let uid = Uuid::parse_str(uid).map_err(|_| ServiceError::bad_request("Invalid UUID"))?;
+        info!("Fetching user by ID: {}", uid);
         self.repository.get_by_id(&uid).await
     }
     
-    pub async fn signup(&self, user_dto: UserDTO) -> Result<String, ServiceError> {
-        if user_dto.username.is_empty() {
-            return Err(ServiceError::bad_request("Username cannot be empty"));
-        }
-        
-        if user_dto.email.is_empty() || !user_dto.email.contains('@') {
-            return Err(ServiceError::bad_request("Invalid email format"));
-        }
-        
-        if user_dto.password.len() < 8 {
-            return Err(ServiceError::bad_request("Password must be at least 8 characters long"));
-        }
+    pub async fn signup(&self, user_dto: UserDTO) -> Result<User, ServiceError> {
+        info!("Signing up user with email: {}", user_dto.email);
+        user_dto.validate().map_err(|e| {
+            let errors = e.to_string();
+            ServiceError::bad_request(&errors)
+        })?;
+        if user_dto.username.is_empty() { return Err(ServiceError::bad_request("Username cannot be empty")); }
+        if !user_dto.email.contains('@') { return Err(ServiceError::bad_request("Invalid email")); }
+        if user_dto.password.len() < 8 { return Err(ServiceError::bad_request("Password too short")); }
 
-        let user = self.repository.get_by_email(&user_dto.email);
-        
-        if user.await.is_ok() {
-            return Err(ServiceError::bad_request(&format!("User with email {} already exists", &user_dto.email)));
-        }
-    
         let password_hash = self.hash_password(&user_dto.password)?;
-
         let new_user_dto = UserDTO {
             username: user_dto.username,
             email: user_dto.email,
             password: password_hash,
         };
-        
-        let user = self.repository.create(&new_user_dto).await?;
-        
-        Ok(format!("User {} successfully created", user.username))
+
+        self.repository.create(&new_user_dto).await.map_err(|e| {
+            error!("Signup error: {}", e);
+            if e.message.contains("duplicate key") {
+                ServiceError::bad_request("Email already exists")
+            } else {
+                e
+            }
+        })
     }
 
-    pub async fn login(&self, login_dto: LoginDTO) -> Result<LoginResponse, ServiceError>{
-        let user = self.repository.get_by_email(&login_dto.email)
-            .await?;
-        
+    pub async fn login(&self, login_dto: LoginDTO) -> Result<LoginResponse, ServiceError> {
+        info!("Login attempt for email: {}", login_dto.email);
+        let user = self.repository.get_by_email(&login_dto.email).await?;
         self.verify_password(&login_dto.password, &user.password_hash)?;
 
-        let user_token = UserToken::new(user.uid);
-        
-        let token = user_token.generate_token(&env::var("JWT_SECRET").unwrap())
-              .map_err(|e| ServiceError::internal_error(&format!("Error generating token: {:?}", e)))?;
-            
-        let expires_at = DateTime::<Utc>::from_timestamp(user_token.exp, 0)
-              .expect("Invalid timestamp");
+        let ttl = chrono::Duration::weeks(1);
+        let user_token = UserToken::new(user.uid, ttl);
+        let token = user_token.generate_token(&self.jwt_secret).map_err(|e| {
+            error!("Token generation failed: {:?}", e);
+            ServiceError::internal_error(&format!("Error generating token: {:?}", e))
+        })?;
+        let expires_at = DateTime::<Utc>::from_timestamp(user_token.exp, 0).unwrap();
 
-        let response = LoginResponse {
-            user: user,
-            token,
-            expires_at: expires_at
-        };
+        info!("User {} logged in successfully", user.email);
+        Ok(LoginResponse { user, token, expires_at })
+    }
 
-        Ok(response)
-
+    fn hash_password(&self, password: &str) -> Result<String, ServiceError> {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        argon2.hash_password(password.as_bytes(), &salt)
+            .map(|h| h.to_string())
+            .map_err(|e| ServiceError::internal_error(&format!("Password hashing error: {}", e)))
     }
 
     fn verify_password(&self, password: &str, hashed_password: &str) -> Result<(), ServiceError> {
         let password_hash = PasswordHash::new(hashed_password)
-            .map_err(|e| ServiceError::internal_error(&format!("Error parsing password hash:: {}", e)))?;
-
-        let argon2 = Argon2::default();
-        argon2.verify_password(password.as_bytes(), &password_hash)
-            .map_err(|_| ServiceError::bad_request("Incorrect email or password"))?;
-        
-        Ok(())
+            .map_err(|e| ServiceError::internal_error(&format!("Error parsing password hash: {}", e)))?;
+        Argon2::default().verify_password(password.as_bytes(), &password_hash)
+            .map_err(|_| ServiceError::bad_request("Incorrect email or password"))
     }
-    
-    fn hash_password(&self, password: &str) -> Result<String, ServiceError> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-        let password_hash = argon2.hash_password(password.as_bytes(), &salt)
-            .map_err(|e| ServiceError::internal_error(&format!("Password hashing error: {}", e)))?; 
-
-        Ok(password_hash.to_string())
-    }
-
 }

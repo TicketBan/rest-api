@@ -7,48 +7,70 @@ mod services;
 mod grpc;
 
 use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer};
+use actix_web::{web ,App, HttpServer};
+use config::config::Config;
 use config::app::config_services;
 use config::db::init_db_pool;
 use dotenvy::dotenv;
 use env_logger;
-use log::LevelFilter;
-use std::env;
+use log::{info, error};
+use std::sync::Arc;
 use shared::middleware::auth::Authentication;
 use crate::grpc::server::start_grpc_server;
-use tokio::task;
+use services::user_service::UserService;
+use actix_cors::Cors;
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
+    let config = Config::from_env().map_err(|e| {
+        error!("Config error: {}", e);
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
+    })?;
     
     env_logger::Builder::new()
-        .filter_level(LevelFilter::Info)
+        .filter_level(config.log_level)
         .init();
 
-    let pool = init_db_pool().await;
-    let grpc_pool: sqlx::Pool<sqlx::Postgres> = pool.clone();
+    info!("Starting user_service with config: {:?}", config);
 
-    task::spawn(async move {
-      let _ = start_grpc_server(grpc_pool).await;
-    });
-
-
-    let host = env::var("USER_SERVICE_HOST").unwrap();
-    let port = env::var("USER_SERVICE_PORT").unwrap();
-    let server_address = format!("{}:{}", host, port);
-
-    let _ = sqlx::migrate!().run(&pool).await;
+    let pool = Arc::new(init_db_pool(&config.database_url).await.map_err(|e| {
+        error!("Failed to create DB pool: {}", e);
+        std::io::Error::new(std::io::ErrorKind::Other, e)
+    })?);
     
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .wrap(Authentication::new(env::var("JWT_SECRET").unwrap()))
-            .configure(config_services)
-            .app_data(actix_web::web::Data::new(pool.clone()))
+    let service = Arc::new(UserService::new(pool.clone(), config.jwt_secret.clone()));
+
+    let grpc_task = tokio::spawn(start_grpc_server(config.grpc_addr.clone(), service.clone()));
+    let http_server = HttpServer::new({
+        move || {
+            let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+            
+            App::new()
+                .wrap(cors)
+                .wrap(Logger::default())
+                .wrap(Authentication::new(config.jwt_secret.clone(), ["/api/auth/signup", "/api/auth/login"].into()))
+                .configure(config_services)
+                .app_data(web::Data::from(service.clone()))
+                
+        }
     })
-    .bind(server_address)?
+    .bind(config.http_addr)?
     .workers(4)
-    .run()
-    .await
+    .run();
+
+    tokio::select! {
+        res = grpc_task => {
+            let result = res.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?; 
+            result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?; 
+        },
+        res = http_server => res?,
+    };
+
+    Ok(())
 }

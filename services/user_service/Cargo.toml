@@ -22,3 +22,6 @@ sqlx.workspace = true
 argon2 = "0.5.3"
 tonic.workspace = true 
 prost.workspace = true
+actix-cors.workspace = true  
+validator.workspace = true
+prost-types.workspace = true

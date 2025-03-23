@@ -1,16 +1,8 @@
-use sqlx::{PgPool, postgres::PgPoolOptions};
-use std::env;
-use dotenvy::dotenv;
+use sqlx::{PgPool, Error ,postgres::PgPoolOptions};
 
-pub async  fn init_db_pool() -> PgPool {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL_CHAT_SERVICE")
-        .expect("DATABASE_URL_CHAT_SERVICE must be set");
-
-    PgPoolOptions::new()
+pub async  fn init_db_pool(database_url: &str) -> Result<PgPool, Error> {
+PgPoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect(database_url)
         .await
-        .expect("Failed to create pool")
 }

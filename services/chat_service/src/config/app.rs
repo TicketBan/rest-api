@@ -1,4 +1,4 @@
-use actix_web::{web};
+use actix_web::web;
 use crate::controllers::{message_controller, chat_controller};
 use crate::websocket;
 
@@ -23,7 +23,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
     );
 
     cfg.service(    
-        web::resource("/ws/chat/{chat_id}/{user_id}")
+        web::resource("/ws/messages/chat_uid/{chat_uid}/user_uid/{user_uid}")
             .route(web::get().to(websocket::handler::chat_ws))
     );
 }

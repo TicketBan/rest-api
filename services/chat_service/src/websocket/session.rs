@@ -28,7 +28,6 @@ impl Drop for DropLogger {
 pub struct ChatSession {
     chat_uid: Uuid,
     user_uid: Uuid,
-    pool: Arc<PgPool>,
     message_service: Arc<MessageService<PgMessageRepository, PgChatRepository>>
 }
 
@@ -43,7 +42,6 @@ impl ChatSession {
         Self {
             chat_uid,
             user_uid,
-            pool: pool.clone(),
             message_service: Arc::new(MessageService::new(pool))  
         }
     }

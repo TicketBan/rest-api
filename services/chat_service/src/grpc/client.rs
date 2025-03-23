@@ -1,36 +1,63 @@
-use tonic::Status;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Uri};
 use shared::user_service_grpc::{UserResponse, UserRequest};
 use shared::user_service_grpc::user_service_grpc_client::UserServiceGrpcClient;
 use crate::errors::service_error::ServiceError;
+use std::sync::Arc;
+use uuid::Uuid;
 
-pub async fn connect_to_grpc_server() -> Result<UserServiceGrpcClient<Channel>, Status> {
-    let url = "http://[::1]:50052"; 
+#[derive(Clone)]
+pub struct GrpcClientConfig {
+    url: String,
+    timeout: std::time::Duration,
 
-    match UserServiceGrpcClient::connect(url).await {
-        Ok(client) => Ok(client),
-        Err(e) => {
-            eprintln!("Failed to connect to gRPC server: {:?}", e);
-            Err(Status::unavailable("Failed to connect to the gRPC server"))
-        }
+}
+
+#[derive(Clone)]
+pub struct UserGrpcClient {
+    inner: UserServiceGrpcClient<Channel>,
+}
+
+impl UserGrpcClient {
+    pub async fn new(config: GrpcClientConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let uri = Uri::try_from(config.url.clone())
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        
+        let channel = Channel::builder(uri)
+            .timeout(config.timeout)
+            .connect()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        let client = UserServiceGrpcClient::new(channel);
+
+        Ok(Self { inner: client })
+    }
+
+    pub async fn get_user_by_uid(&self, user_uid: Uuid) -> Result<UserResponse, ServiceError> {
+        let request = tonic::Request::new(UserRequest {
+            uid: user_uid.to_string(),
+        });
+
+        self.inner
+            .clone()
+            .get_user_by_uid(request)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to get user by UID {}: {:?}", user_uid, e);
+                match e.code() {
+                    tonic::Code::NotFound => ServiceError::not_found(&format!("User {} not found", user_uid)),
+                    tonic::Code::Unavailable => ServiceError::internal_error("gRPC server unavailable"),
+                    _ => ServiceError::internal_error(&format!("gRPC error: {}", e)),
+                }
+            })
+            .map(|resp| resp.into_inner())
     }
 }
-pub async fn get_user_by_uid(user_uid: String) -> Result<UserResponse, ServiceError> {
-    let mut client = match connect_to_grpc_server().await {
-        Ok(client) => client,
-        Err(e) => {
-            log::error!("gRPC connection failed: {:?}", e);
-            return Err(ServiceError::internal_error("Failed to connect to gRPC server"));
-        },
-    };
 
-    let request = UserRequest { user_uid };
-    let grpc_request = tonic::Request::new(request);
-
-    let response = client.get_user_by_uid(grpc_request).await.map_err(|e| {
-        log::error!("gRPC error: {:?}", e);
-        ServiceError::internal_error("Failed to get user by UID")
-    })?;
-
-    Ok(response.into_inner())
+pub async fn init_grpc_client(url: String, timeout: std::time::Duration ) -> Result<Arc<UserGrpcClient>, ServiceError> {
+    let config = GrpcClientConfig { url, timeout };
+    let client = UserGrpcClient::new(config)
+        .await
+        .map_err(|e| ServiceError::internal_error(&format!("Failed to init gRPC client: {}", e)))?;
+    Ok(Arc::new(client))
 }

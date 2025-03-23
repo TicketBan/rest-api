@@ -1,14 +1,11 @@
-use async_trait::async_trait;
 use sqlx::PgPool;
-use chrono::Utc;
 use uuid::Uuid;
 use std::sync::Arc;
-use crate::models::chat::{Chat, CreateChatDTO, ChatParticipant};
+use crate::models::chat::{Chat, CreateChatDTO};
 use crate::errors::service_error::ServiceError;
-use reqwest::Client;
 
-#[async_trait]
-pub trait ChatRepository {
+#[async_trait::async_trait]
+pub trait ChatRepository:Send + Sync {
     async fn get_user_chats(&self, user_uid: &Uuid) -> Result<Vec<Chat>, ServiceError>;
     async fn get_by_id(&self, uid: &Uuid) -> Result<Chat, ServiceError>;
     async fn create(&self, chat_dto: &CreateChatDTO) -> Result<Chat, ServiceError>;
@@ -27,10 +24,10 @@ impl PgChatRepository {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl ChatRepository for PgChatRepository {
     async fn get_user_chats(&self, user_uid: &Uuid) -> Result<Vec<Chat>, ServiceError> {
-        let chats = sqlx::query_as::<_, Chat>("
+        sqlx::query_as::<_, Chat>("
             SELECT c.uid, c.name, c.created_at, c.updated_at
             FROM chats c
             JOIN chat_participants cp ON c.uid = cp.chat_uid
@@ -39,52 +36,41 @@ impl ChatRepository for PgChatRepository {
         .bind(user_uid)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?;
-
-        Ok(chats) 
+        .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
     }
     
     async fn get_by_id(&self, uid: &Uuid) -> Result<Chat, ServiceError> {
-        let chat = sqlx::query_as::<_, Chat>("
+        sqlx::query_as::<_, Chat>("
             SELECT * FROM chats WHERE uid = $1"
         )
         .bind(uid)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?
-        .ok_or_else(|| ServiceError::not_found(&format!("Chat with uid {} not found", uid)))?;
-
-        Ok(chat)
+        .ok_or_else(|| ServiceError::not_found(&format!("Chat with uid {} not found", uid)))
     }
     
     async fn create(&self, chat_dto: &CreateChatDTO) -> Result<Chat, ServiceError> {
         let mut tx = self.pool.begin().await
             .map_err(|e| ServiceError::internal_error(&format!("Transaction error: {}", e)))?;
-    
-        let chat_uid = Uuid::new_v4();
-        let now = Utc::now();
         
         let chat = sqlx::query_as::<_, Chat>("
-            INSERT INTO chats (uid, name, created_at, updated_at)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO chats (name)
+            VALUES ($1)
             RETURNING uid, name, created_at, updated_at"
         )
-        .bind(chat_uid)
         .bind(&chat_dto.name)
-        .bind(now)
-        .bind(now)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Error creating a chat room: {}", e)))?;
     
         for user_uid in &chat_dto.participants {
             sqlx::query(
-                "INSERT INTO chat_participants (chat_uid, user_uid, joined_at)
-                 VALUES ($1, $2, $3)"
+                "INSERT INTO chat_participants (chat_uid, user_uid)
+                 VALUES ($1, $2)"
             )
-            .bind(chat_uid)
+            .bind(chat.uid)
             .bind(user_uid)
-            .bind(now)
             .execute(&mut *tx)
             .await
             .map_err(|e| ServiceError::internal_error(&format!("Error adding participant {}: {}", user_uid, e)))?;
@@ -126,12 +112,11 @@ impl ChatRepository for PgChatRepository {
         }
 
         sqlx::query("
-            INSERT INTO chat_participants (chat_uid, user_uid, joined_at)
-            VALUES ($1, $2, $3)"
+            INSERT INTO chat_participants (chat_uid, user_uid)
+            VALUES ($1, $2)"
         )
         .bind(chat_uid)
         .bind(user_uid)
-        .bind(Utc::now())
         .execute(&*self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Error adding a participant: {}", e)))?;
@@ -158,14 +143,12 @@ impl ChatRepository for PgChatRepository {
     }
 
     async fn get_chat_participants(&self, chat_uid: &Uuid) -> Result<Vec<Uuid>, ServiceError> {
-        let participants = sqlx::query_scalar::<_, Uuid>(
+        sqlx::query_scalar::<_, Uuid>(
             "SELECT user_uid FROM chat_participants WHERE chat_uid = $1"
         )
         .bind(chat_uid)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ServiceError::internal_error(&format!("Error fetching participants: {}", e)))?;
-    
-        Ok(participants)
+        .map_err(|e| ServiceError::internal_error(&format!("Error fetching participants: {}", e)))
     }
 }
