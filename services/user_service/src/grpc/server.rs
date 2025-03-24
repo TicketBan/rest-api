@@ -5,8 +5,6 @@ use shared::user_service_grpc::{UserRequest, UserResponse};
 use crate::services::user_service::UserService;
 use crate::repositories::user_repository::PgUserRepository;
 use log::{info, error};
-use prost_types::Timestamp;
-use chrono::{DateTime, Utc};
 
 pub struct UserGrpcService {
     user_service: Arc<UserService<PgUserRepository>>,
@@ -36,8 +34,8 @@ impl UserServiceGrpc for UserGrpcService {
             uid: user.uid.to_string(),
             username: user.username,
             email: user.email,
-            created_at: convert_to_prost_timestamp(user.created_at),
-            updated_at: convert_to_prost_timestamp(user.updated_at),
+            created_at: user.created_at.timestamp(),
+            updated_at: user.updated_at.timestamp(),
         };
 
         Ok(Response::new(response))
@@ -54,11 +52,4 @@ pub async fn start_grpc_server(addr: std::net::SocketAddr, user_service: Arc<Use
         .await?;
 
     Ok(())
-}
-
-fn convert_to_prost_timestamp(dt: DateTime<Utc>) -> Option<Timestamp> {
-    Some(Timestamp {
-        seconds: dt.timestamp(),
-        nanos: dt.timestamp_subsec_nanos() as i32,
-    })
 }

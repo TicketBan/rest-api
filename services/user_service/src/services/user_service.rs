@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use actix_web::Result;
 use sqlx::PgPool;
 use uuid::Uuid;
 use argon2::{password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString, PasswordVerifier}, Argon2};
@@ -32,7 +33,7 @@ impl<T: UserRepository> UserService<T> {
     
     pub async fn get_by_id(&self, uid: &str) -> Result<User, ServiceError> {
         let uid = Uuid::parse_str(uid).map_err(|_| ServiceError::bad_request("Invalid UUID"))?;
-        info!("Fetching user by ID: {}", uid);
+
         self.repository.get_by_id(&uid).await
     }
     
@@ -65,9 +66,14 @@ impl<T: UserRepository> UserService<T> {
 
     pub async fn login(&self, login_dto: LoginDTO) -> Result<LoginResponse, ServiceError> {
         info!("Login attempt for email: {}", login_dto.email);
+        login_dto.validate().map_err(|e| {
+            let errors = e.to_string();
+            ServiceError::bad_request(&errors)
+        })?;
+
         let user = self.repository.get_by_email(&login_dto.email).await?;
         self.verify_password(&login_dto.password, &user.password_hash)?;
-
+        
         let ttl = chrono::Duration::weeks(1);
         let user_token = UserToken::new(user.uid, ttl);
         let token = user_token.generate_token(&self.jwt_secret).map_err(|e| {
