@@ -5,9 +5,9 @@ use crate::models::chat::{Chat, CreateChatDTO};
 use crate::errors::service_error::ServiceError;
 
 #[async_trait::async_trait]
-pub trait ChatRepository:Send + Sync {
+pub trait ChatRepository {
     async fn get_user_chats(&self, user_uid: &Uuid) -> Result<Vec<Chat>, ServiceError>;
-    async fn get_by_id(&self, uid: &Uuid) -> Result<Chat, ServiceError>;
+    async fn get_by_uid(&self, uid: &Uuid) -> Result<Chat, ServiceError>;
     async fn create(&self, chat_dto: &CreateChatDTO) -> Result<Chat, ServiceError>;
     async fn add_participant(&self, chat_uid: &Uuid, user_uid: &Uuid) -> Result<(), ServiceError>;
     async fn remove_participant(&self, chat_uid: &Uuid, user_uid: &Uuid) -> Result<(), ServiceError>;
@@ -39,7 +39,7 @@ impl ChatRepository for PgChatRepository {
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
     }
     
-    async fn get_by_id(&self, uid: &Uuid) -> Result<Chat, ServiceError> {
+    async fn get_by_uid(&self, uid: &Uuid) -> Result<Chat, ServiceError> {
         sqlx::query_as::<_, Chat>("
             SELECT * FROM chats WHERE uid = $1"
         )

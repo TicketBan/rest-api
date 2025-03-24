@@ -23,18 +23,16 @@ impl MessageService<PgMessageRepository, PgChatRepository> {
 impl<M: MessageRepository, C: ChatRepository> MessageService<M, C> {
     pub async fn get_all_messages_by_chat_uid(
         &self,
-        chat_uid: &str,
+        chat_uid: String,
     ) -> Result<Vec<Message>, ServiceError> {
 
-        let chat_uid = Uuid::parse_str(chat_uid)
+        let chat_uid = Uuid::parse_str(&chat_uid)
             .map_err(|e| ServiceError::bad_request(&format!("Invalid UUID format: {}", e)))?;
 
         let _ = self
             .chat_repository
-            .get_by_id(&chat_uid)
+            .get_by_uid(&chat_uid)
             .await?;
-
-
 
         self.repository.get_all_by_chat_uid(&chat_uid).await
     }

@@ -47,7 +47,7 @@ impl<T: UserRepository> UserService<T> {
         if !user_dto.email.contains('@') { return Err(ServiceError::bad_request("Invalid email")); }
         if user_dto.password.len() < 8 { return Err(ServiceError::bad_request("Password too short")); }
 
-        let password_hash = self.hash_password(&user_dto.password)?;
+        let password_hash = hash_password(&user_dto.password)?;
         let new_user_dto = UserDTO {
             username: user_dto.username,
             email: user_dto.email,
@@ -72,7 +72,7 @@ impl<T: UserRepository> UserService<T> {
         })?;
 
         let user = self.repository.get_by_email(&login_dto.email).await?;
-        self.verify_password(&login_dto.password, &user.password_hash)?;
+        verify_password(&login_dto.password, &user.password_hash)?;
         
         let ttl = chrono::Duration::weeks(1);
         let user_token = UserToken::new(user.uid, ttl);
@@ -86,18 +86,19 @@ impl<T: UserRepository> UserService<T> {
         Ok(LoginResponse { user, token, expires_at })
     }
 
-    fn hash_password(&self, password: &str) -> Result<String, ServiceError> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-        argon2.hash_password(password.as_bytes(), &salt)
-            .map(|h| h.to_string())
-            .map_err(|e| ServiceError::internal_error(&format!("Password hashing error: {}", e)))
-    }
+}
 
-    fn verify_password(&self, password: &str, hashed_password: &str) -> Result<(), ServiceError> {
-        let password_hash = PasswordHash::new(hashed_password)
-            .map_err(|e| ServiceError::internal_error(&format!("Error parsing password hash: {}", e)))?;
-        Argon2::default().verify_password(password.as_bytes(), &password_hash)
-            .map_err(|_| ServiceError::bad_request("Incorrect email or password"))
-    }
+fn hash_password(password: &str) -> Result<String, ServiceError> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    argon2.hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| ServiceError::internal_error(&format!("Password hashing error: {}", e)))
+}
+
+fn verify_password(password: &str, hashed_password: &str) -> Result<(), ServiceError> {
+    let password_hash = PasswordHash::new(hashed_password)
+        .map_err(|e| ServiceError::internal_error(&format!("Error parsing password hash: {}", e)))?;
+    Argon2::default().verify_password(password.as_bytes(), &password_hash)
+        .map_err(|_| ServiceError::bad_request("Incorrect email or password"))
 }

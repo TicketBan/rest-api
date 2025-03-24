@@ -7,25 +7,30 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use futures::future::join_all;
 
-#[derive(Clone)]
-pub struct ChatService {
-    repository: Arc<dyn ChatRepository>,
+
+pub struct ChatService<T: ChatRepository> {
+    repository: T,
     user_client: Arc<UserGrpcClient>,
 }
 
-impl ChatService {
+impl ChatService<PgChatRepository> {
     pub fn new(pool: Arc<PgPool>, user_client: Arc<UserGrpcClient>) -> Self {
         Self {
-            repository: Arc::new(PgChatRepository::new(pool)),
+            repository: PgChatRepository::new(pool),
             user_client,
         }
     }
+}
 
-    pub async fn get_user_chats(&self, user_id: Uuid) -> Result<Vec<Chat>, ServiceError> {
-        self.repository.get_user_chats(&user_id).await
+impl<T: ChatRepository> ChatService<T> {
+
+    pub async fn get_user_chats(&self, user_uid: String) -> Result<Vec<Chat>, ServiceError> {
+        let user_uid = parse_uuid(&user_uid)?;
+        self.repository.get_user_chats(&user_uid).await
     }
-    pub async fn get_chat_by_id(&self, chat_id: Uuid) -> Result<Chat, ServiceError> {
-        self.repository.get_by_id(&chat_id).await
+    pub async fn get_chat_by_uid(&self, chat_uid: String) -> Result<Chat, ServiceError> {
+        let chat_uid = parse_uuid(&chat_uid)?;
+        self.repository.get_by_uid(&chat_uid).await
     }
 
     pub async fn create(&self, chat_dto: CreateChatDTO) -> Result<Chat, ServiceError> {
@@ -39,15 +44,15 @@ impl ChatService {
             return Err(ServiceError::bad_request("Duplicate participants are not allowed"));
         }
 
-        let user_checks = join_all(unique_participants.iter().map(|&user_id| {
-            self.user_client.get_user_by_uid(user_id)
+        let user_checks = join_all(unique_participants.iter().map(|&user_uid| {
+            self.user_client.get_user_by_uid(user_uid)
         })).await;
 
         let mut errors = Vec::new();
         for (idx, result) in user_checks.into_iter().enumerate() {
             if let Err(e) = result {
-                let user_id = chat_dto.participants[idx]; 
-                errors.push(format!("User {} not found: {}", user_id, e));
+                let user_uid = chat_dto.participants[idx]; 
+                errors.push(format!("User {} not found: {}", user_uid, e));
             }
         }
         if !errors.is_empty() {
@@ -57,18 +62,32 @@ impl ChatService {
         self.repository.create(&chat_dto).await
     }
 
-    pub async fn add_participant(&self, chat_id: Uuid, user_id: Uuid) -> Result<(), ServiceError> {
-        self.user_client.get_user_by_uid(user_id)
+    pub async fn add_participant(&self, chat_uid: String, user_uid: String) -> Result<(), ServiceError> {
+        let user_uid = parse_uuid(&user_uid)?;
+        let chat_uid = parse_uuid(&chat_uid)?;
+
+        self.user_client.get_user_by_uid(user_uid)
             .await
-            .map_err(|e| ServiceError::not_found(&format!("User {} not found: {}", user_id, e)))?;
-        self.repository.add_participant(&chat_id, &user_id).await
+            .map_err(|e| ServiceError::not_found(&format!("User {} not found: {}", user_uid, e)))?;
+        self.repository.add_participant(&chat_uid, &user_uid).await
     }
 
-    pub async fn remove_participant(&self, chat_id: Uuid, user_id: Uuid) -> Result<(), ServiceError> {
-        self.repository.remove_participant(&chat_id, &user_id).await
+    pub async fn remove_participant(&self, chat_uid: String, user_uid: String) -> Result<(), ServiceError> {
+        let chat_uid = parse_uuid(&chat_uid)?;
+        let user_uid = parse_uuid(&user_uid)?;
+        
+        self.repository.remove_participant(&chat_uid, &user_uid).await
     }
 
-    pub async fn get_chat_participants(&self, chat_id: Uuid) -> Result<Vec<Uuid>, ServiceError> {
-        self.repository.get_chat_participants(&chat_id).await
+    pub async fn get_chat_participants(&self, chat_uid: String) -> Result<Vec<Uuid>, ServiceError> {
+        let chat_uid = parse_uuid(&chat_uid)?;
+        self.repository.get_chat_participants(&chat_uid).await
     }
+
+}
+
+
+fn parse_uuid(uuid_str: &str) -> Result<Uuid, ServiceError> {
+    Uuid::parse_str(uuid_str)
+        .map_err(|e| ServiceError::bad_request(&format!("Invalid UUID: {}", e)))
 }

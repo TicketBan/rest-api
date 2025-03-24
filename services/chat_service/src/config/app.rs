@@ -10,7 +10,7 @@ pub fn config_services(cfg: &mut web::ServiceConfig) {
                 web::scope("/chats")
                     .route("", web::post().to(chat_controller::create_chat))
                     .route("/user/{user_id}", web::get().to(chat_controller::get_user_chats))
-                    .route("/{id}", web::get().to(chat_controller::get_chat_by_id))
+                    .route("/{id}", web::get().to(chat_controller::get_chat_by_uid))
                     .route("/{id}/participants", web::get().to(chat_controller::get_chat_participants))
                     .route("/{id}/participants/{user_id}", web::post().to(chat_controller::add_participant))
                     .route("/{id}/participants/{user_id}", web::delete().to(chat_controller::remove_participant))

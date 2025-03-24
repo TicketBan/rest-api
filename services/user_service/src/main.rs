@@ -54,7 +54,7 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .wrap(cors)
                 .wrap(Logger::default())
-                .wrap(Authentication::new(config.jwt_secret.clone(), ["/api/auth/signup", "/api/auth/login"].into()))
+                .wrap(Authentication::new(config.jwt_secret.clone(), Some(["/api/auth/signup", "/api/auth/login"].into())))
                 .configure(config_services)
                 .app_data(web::Data::from(service.clone()))
                 
@@ -63,6 +63,8 @@ async fn main() -> std::io::Result<()> {
     .bind(config.http_addr)?
     .workers(4)
     .run();
+
+    
 
     tokio::select! {
         res = grpc_task => {

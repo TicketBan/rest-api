@@ -2,7 +2,6 @@ use crate::models::user_token::UserToken;
 use actix_web::{error::ErrorUnauthorized ,Error};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use futures_util::future::{LocalBoxFuture, ok};
-use log::info;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -29,13 +28,11 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        info!("{:?}", req);
         if self.excluded_paths.contains(req.path()) {
             return Box::pin(self.service.call(req));
         }
     
         let auth_header = req.headers().get("Authorization");
-        info!("auth_header: {:?}",auth_header);
         if let Some(auth_header) = auth_header {
             if let Ok(auth_str) = auth_header.to_str() {
                 if auth_str.starts_with("Bearer ") {
@@ -77,11 +74,12 @@ pub struct Authentication {
     excluded_paths: HashSet<&'static str>,
 }
 
+
 impl Authentication {
-    pub fn new(secret: Arc<String>, excluded_paths: HashSet<&'static str>) -> Self {
+    pub fn new(secret: Arc<String>, excluded_paths: Option<HashSet<&'static str>>) -> Self {
         Self {
             secret,
-            excluded_paths,
+            excluded_paths: excluded_paths.unwrap_or_else(HashSet::new),
         }
     }
 }

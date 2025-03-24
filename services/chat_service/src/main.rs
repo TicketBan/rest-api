@@ -12,6 +12,7 @@ use actix_web::middleware::Logger;
 use actix_cors::Cors;
 use config::app::config_services;
 use config::db::init_db_pool;
+use services::message_service::MessageService;
 use std::sync::Arc;
 use env_logger;
 use shared::middleware::auth::Authentication;
@@ -20,6 +21,7 @@ use config::config::Config;
 use log::{info, error};
 use services::chat_service::ChatService;
 use grpc::client::init_grpc_client;
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -39,7 +41,6 @@ async fn main() -> std::io::Result<()> {
         std::io::Error::new(std::io::ErrorKind::Other, e)
     })?);
 
-    // let _ = sqlx::migrate!().run(&pg_pool).await;
     let grpc_client = match init_grpc_client(config.grpc_addr.clone(), std::time::Duration::from_secs(5)).await {
         Ok(client) => client,
         Err(e) => {
@@ -48,8 +49,8 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let service = ChatService::new(pool.clone(), grpc_client.clone());
-
+    let message_service = Arc::new(MessageService::new(pool.clone()));
+    let chat_service = Arc::new(ChatService::new(pool.clone(), grpc_client.clone()));
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -61,10 +62,11 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Logger::default())
-            .wrap(Authentication::new(config.jwt_secret.clone(),[].into()))
+            .wrap(Authentication::new(config.jwt_secret.clone(), None))
             .configure(config_services)
             .app_data(web::Data::new(pool.clone()))
-            .app_data(web::Data::new(service.clone()))
+            .app_data(web::Data::from(message_service.clone()))
+            .app_data(web::Data::from(chat_service.clone()))
     })
     .bind(config.http_addr)?
     .workers(4)
