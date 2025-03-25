@@ -35,10 +35,10 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting user_service with config: {:?}", config);
 
-    let pool = Arc::new(init_db_pool(&config.database_url).await.map_err(|e| {
+    let pool = init_db_pool(&config.database_url).await.map_err(|e| {
         error!("Failed to create DB pool: {}", e);
         std::io::Error::new(std::io::ErrorKind::Other, e)
-    })?);
+    })?;
     
     let service = Arc::new(UserService::new(pool.clone(), config.jwt_secret.clone()));
 

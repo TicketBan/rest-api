@@ -36,10 +36,10 @@ async fn main() -> std::io::Result<()> {
     .init();
     info!("Starting chat_service with config: {:?}", config);
 
-    let pool = Arc::new(init_db_pool(&config.database_url).await.map_err(|e| {
+    let pool = init_db_pool(&config.database_url).await.map_err(|e| {
         error!("Failed to create DB pool: {}", e);
         std::io::Error::new(std::io::ErrorKind::Other, e)
-    })?);
+    })?;
 
     let grpc_client = match init_grpc_client(config.grpc_addr.clone(), std::time::Duration::from_secs(5)).await {
         Ok(client) => client,
@@ -64,7 +64,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(Authentication::new(config.jwt_secret.clone(), None))
             .configure(config_services)
-            .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(message_service.clone()))
             .app_data(web::Data::from(message_service.clone()))
             .app_data(web::Data::from(chat_service.clone()))
     })

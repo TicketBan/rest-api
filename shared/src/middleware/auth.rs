@@ -41,7 +41,7 @@ where
                     match UserToken::validate_token(token, &self.secret) {
                         Ok(user_token) if user_token.is_valid() => {
                             let fut = self.service.call(req);
-                            return Box::pin(async move {
+                            return Box::pin(async {
                                 match fut.await {
                                     Ok(res) => Ok(res),
                                     Err(err) => Err(err),

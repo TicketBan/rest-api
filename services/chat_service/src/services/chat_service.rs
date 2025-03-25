@@ -14,7 +14,7 @@ pub struct ChatService<T: ChatRepository> {
 }
 
 impl ChatService<PgChatRepository> {
-    pub fn new(pool: Arc<PgPool>, user_client: Arc<UserGrpcClient>) -> Self {
+    pub fn new(pool: PgPool, user_client: Arc<UserGrpcClient>) -> Self {
         Self {
             repository: PgChatRepository::new(pool),
             user_client,

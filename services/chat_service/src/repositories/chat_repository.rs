@@ -1,6 +1,5 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use std::sync::Arc;
 use crate::models::chat::{Chat, CreateChatDTO};
 use crate::errors::service_error::ServiceError;
 
@@ -15,11 +14,11 @@ pub trait ChatRepository {
 }
 
 pub struct PgChatRepository {
-    pub pool: Arc<PgPool>,
+    pub pool: PgPool,
 }
 
 impl PgChatRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
@@ -34,7 +33,7 @@ impl ChatRepository for PgChatRepository {
             WHERE cp.user_uid = $1"
         )
         .bind(user_uid)
-        .fetch_all(&*self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
     }
@@ -44,7 +43,7 @@ impl ChatRepository for PgChatRepository {
             SELECT * FROM chats WHERE uid = $1"
         )
         .bind(uid)
-        .fetch_optional(&*self.pool)
+        .fetch_optional(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| ServiceError::not_found(&format!("Chat with uid {} not found", uid)))
@@ -86,7 +85,7 @@ impl ChatRepository for PgChatRepository {
         let chat_exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM chats WHERE uid = $1) as exists"
         )
         .bind(chat_uid)
-        .fetch_one(&*self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?;
 
@@ -103,7 +102,7 @@ impl ChatRepository for PgChatRepository {
         )
         .bind(chat_uid)
         .bind(user_uid)   
-        .fetch_one(&*self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))?;
 
@@ -117,7 +116,7 @@ impl ChatRepository for PgChatRepository {
         )
         .bind(chat_uid)
         .bind(user_uid)
-        .execute(&*self.pool)
+        .execute(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Error adding a participant: {}", e)))?;
 
@@ -131,7 +130,7 @@ impl ChatRepository for PgChatRepository {
         )
         .bind(chat_uid)
         .bind(user_uid)
-        .execute(&*self.pool)
+        .execute(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Participant deletion error {}", e)))?;
 
@@ -147,7 +146,7 @@ impl ChatRepository for PgChatRepository {
             "SELECT user_uid FROM chat_participants WHERE chat_uid = $1"
         )
         .bind(chat_uid)
-        .fetch_all(&*self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Error fetching participants: {}", e)))
     }

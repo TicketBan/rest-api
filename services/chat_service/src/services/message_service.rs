@@ -3,19 +3,19 @@ use crate::models::message::{CreateMessageDTO, Message};
 use crate::repositories::chat_repository::{ChatRepository, PgChatRepository};
 use crate::repositories::message_repository::{MessageRepository, PgMessageRepository};
 use sqlx::PgPool;
-use std::sync::Arc;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct MessageService<M: MessageRepository, C: ChatRepository> {
     repository: M,
     chat_repository: C,
 }
 
 impl MessageService<PgMessageRepository, PgChatRepository> {
-    pub fn new(pool: Arc<PgPool>) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self {
             repository: PgMessageRepository::new(pool.clone()),
-            chat_repository: PgChatRepository::new(pool),
+            chat_repository: PgChatRepository::new(pool.clone()),
         }
     }
 }

@@ -2,7 +2,6 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use crate::models::user::{User, UserDTO};
 use crate::errors::service_error::ServiceError;
-use std::sync::Arc;
 use log::{info, error};
 
 #[async_trait::async_trait]
@@ -14,11 +13,11 @@ pub trait UserRepository {
 }
 
 pub struct PgUserRepository {
-    pub pool: Arc<PgPool>,
+    pub pool: PgPool,
 }
 
 impl PgUserRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
+    pub fn new(pool: PgPool ) -> Self {
         Self { pool }
     }
 }
@@ -28,7 +27,7 @@ impl UserRepository for PgUserRepository {
     async fn get_all(&self) -> Result<Vec<User>, ServiceError> {
         info!("Executing get_all query");
         sqlx::query_as::<_, User>("SELECT * FROM users")
-            .fetch_all(&*self.pool)
+            .fetch_all(&self.pool)
             .await
             .map_err(|e| {
                 error!("Database error in get_all: {}", e);
@@ -40,7 +39,7 @@ impl UserRepository for PgUserRepository {
         info!("Fetching user by ID: {}", uid);
         sqlx::query_as::<_, User>("SELECT * FROM users WHERE uid = $1")
             .bind(uid)
-            .fetch_optional(&*self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| {
                 error!("Database error in get_by_id: {}", e);
@@ -53,7 +52,7 @@ impl UserRepository for PgUserRepository {
         info!("Fetching user by email: {}", email);
         sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
             .bind(email)
-            .fetch_optional(&*self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| {
                 error!("Database error in get_by_email: {}", e);
@@ -72,7 +71,7 @@ impl UserRepository for PgUserRepository {
         .bind(&user_dto.username)
         .bind(&user_dto.email)
         .bind(&user_dto.password)
-        .fetch_one(&*self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Failed to create user: {}", e)))
     }

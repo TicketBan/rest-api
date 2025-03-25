@@ -17,7 +17,7 @@ pub struct UserService<T: UserRepository> {
 }
 
 impl UserService<PgUserRepository> {
-    pub fn new(pool: Arc<PgPool>, jwt_secret: Arc<String>) -> Self {
+    pub fn new(pool: PgPool, jwt_secret: Arc<String>) -> Self {
         Self {
             repository: PgUserRepository::new(pool),
             jwt_secret,

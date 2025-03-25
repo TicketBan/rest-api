@@ -2,7 +2,6 @@ use crate::errors::service_error::ServiceError;
 use crate::models::message::{CreateMessageDTO, Message};
 use async_trait::async_trait;
 use sqlx::PgPool;
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[async_trait]
@@ -12,11 +11,11 @@ pub trait MessageRepository {
 }
 
 pub struct PgMessageRepository {
-    pub pool: Arc<PgPool>,
+    pub pool: PgPool,
 }
 
 impl PgMessageRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
@@ -31,7 +30,7 @@ impl MessageRepository for PgMessageRepository {
              ORDER BY created_at ASC",
         )
         .bind(chat_uid)
-        .fetch_all(&*self.pool)
+        .fetch_all(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
     }
@@ -45,7 +44,7 @@ impl MessageRepository for PgMessageRepository {
         .bind(&create_message_dto.chat_uid)
         .bind(&create_message_dto.user_uid)
         .bind(&create_message_dto.content)
-        .fetch_one(&*self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(|e| ServiceError::internal_error(&format!("Database error: {}", e)))
 

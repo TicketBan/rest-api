@@ -2,16 +2,18 @@ use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use uuid::Uuid;
 use std::sync::Arc;
-use sqlx::PgPool;
 use crate::websocket::session::ChatSession;
 use crate::errors::service_error::ServiceError;
 use log;
+use crate::services::message_service::MessageService;
+use crate::repositories::chat_repository::PgChatRepository;
+use crate::repositories::message_repository::PgMessageRepository;
 
 pub async fn chat_ws(
     req: HttpRequest,
     stream: web::Payload,
     path: web::Path<(String, String)>,
-    pool: web::Data<Arc<PgPool>>,
+    message_service: web::Data<Arc<MessageService<PgMessageRepository, PgChatRepository>>>
 ) -> Result<HttpResponse, Error> {
     log::info!("Received connection request: {:?}", req);
     
@@ -30,7 +32,7 @@ pub async fn chat_ws(
     let session = ChatSession::new(
         chat_uid,
         user_uid,
-        pool.get_ref().clone(),
+        message_service.get_ref().clone()
     );
     
     match ws::start(session, &req, stream) {

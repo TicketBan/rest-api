@@ -3,7 +3,6 @@ use actix_web_actors::ws;
 use crate::repositories::chat_repository::PgChatRepository;
 use crate::repositories::message_repository::PgMessageRepository;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -38,11 +37,11 @@ struct WebSocketMessage {
 }
 
 impl ChatSession {
-    pub fn new(chat_uid: Uuid, user_uid: Uuid, pool: Arc<PgPool>) -> Self {
+    pub fn new(chat_uid: Uuid, user_uid: Uuid, message_service: Arc<MessageService<PgMessageRepository, PgChatRepository>>) -> Self {
         Self {
             chat_uid,
             user_uid,
-            message_service: Arc::new(MessageService::new(pool))  
+            message_service: message_service 
         }
     }
 }
@@ -104,6 +103,7 @@ impl ChatSession {
         let user_uid = self.user_uid;
         let content = content.to_string();
         let message_service = self.message_service.clone();
+
     
         let _drop_logger = DropLogger("save_to_message variables");
     
@@ -113,7 +113,7 @@ impl ChatSession {
             content: content.clone(),
         };
     
-        actix::spawn(async move {
+        tokio::spawn(async move {
             let _inside_logger = DropLogger("inside async task");
 
             let result = message_service.create(message).await;
